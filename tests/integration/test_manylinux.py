@@ -325,25 +325,30 @@ class Anylinux:
         assert "manylinux" not in orig_wheel
 
         # Exclude libgfortran from grafting into the wheel
-        exclude = "libgfortran.so.5"
+        excludes = {
+            "manylinux_2_12_x86_64": ["libgfortran.so.3", "libgfortran.so.5"],
+            "manylinux_2_17_x86_64": ["libgfortran.so.3", "libgfortran.so.5"],
+            "manylinux_2_24_x86_64": ["libgfortran.so.3"],
+            "manylinux_2_28_x86_64": ["libgfortran.so.5"],
+            "musllinux_1_1_x86_64": ["libgfortran.so.5"],
+        }[policy]
 
-        output = docker_exec(
-            manylinux_ctr,
-            [
-                "auditwheel",
-                "repair",
-                "--plat",
-                policy,
-                "--exclude",
-                exclude,
-                "--only-plat",
-                "-w",
-                "/io",
-                f"/io/{orig_wheel}",
-            ],
-        )
+        repair_command = [
+            "auditwheel",
+            "repair",
+            "--plat",
+            policy,
+            "--only-plat",
+            "-w",
+            "/io",
+        ]
+        for exclude in excludes:
+            repair_command.extend(["--exclude", exclude])
+        repair_command.append(f"/io/{orig_wheel}")
+        output = docker_exec(manylinux_ctr, repair_command)
 
-        assert f"Excluding {exclude}" in output
+        for exclude in excludes:
+            assert f"Excluding {exclude}" in output
         filenames = os.listdir(io_folder)
         assert len(filenames) == 2
         repaired_wheel = f"numpy-{NUMPY_VERSION}-{PYTHON_ABI}-{tag}.whl"
@@ -351,7 +356,7 @@ class Anylinux:
 
         # Make sure we don't have libgfortran in the result
         contents = zipfile.ZipFile(os.path.join(io_folder, repaired_wheel)).namelist()
-        assert not any(x for x in contents if x.startswith("libgfortran"))
+        assert not any(x for x in contents if "/libgfortran" in x)
         assert contents is None, contents
 
     def test_build_wheel_with_binary_executable(
