@@ -326,6 +326,7 @@ class Anylinux:
 
         # Exclude libgfortran from grafting into the wheel
         excludes = {
+            "manylinux_2_5_x86_64": ["libgfortran.so.1", "libgfortran.so.3"],
             "manylinux_2_12_x86_64": ["libgfortran.so.3", "libgfortran.so.5"],
             "manylinux_2_17_x86_64": ["libgfortran.so.3", "libgfortran.so.5"],
             "manylinux_2_24_x86_64": ["libgfortran.so.3"],
@@ -357,7 +358,6 @@ class Anylinux:
         # Make sure we don't have libgfortran in the result
         contents = zipfile.ZipFile(os.path.join(io_folder, repaired_wheel)).namelist()
         assert not any(x for x in contents if "/libgfortran" in x)
-        assert contents is None, contents
 
     def test_build_wheel_with_binary_executable(
         self, any_manylinux_container, docker_python, io_folder
