@@ -333,7 +333,7 @@ class Anylinux:
                 "auditwheel",
                 "repair",
                 "--plat",
-                 policy,
+                policy,
                 "--exclude",
                 exclude,
                 "--only-plat",
