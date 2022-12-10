@@ -6,6 +6,7 @@ from os.path import abspath, basename, exists, isfile
 
 from auditwheel.patcher import Patchelf
 
+from .abi3 import check_abi3
 from .policy import (
     POLICY_PRIORITY_HIGHEST,
     get_policy_by_name,
@@ -119,6 +120,8 @@ def execute(args, p):
             p.error("cannot access %s. No such file" % wheel_file)
 
         logger.info("Repairing %s", basename(wheel_file))
+
+        check_abi3(wheel_file, True, True)
 
         if not exists(args.WHEEL_DIR):
             os.makedirs(args.WHEEL_DIR)

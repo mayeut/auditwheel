@@ -24,6 +24,7 @@ def execute(args, p):
     import json
     from os.path import basename, isfile
 
+    from .abi3 import ABI3ViolationException, check_abi3
     from .policy import (
         POLICY_PRIORITY_HIGHEST,
         POLICY_PRIORITY_LOWEST,
@@ -37,6 +38,12 @@ def execute(args, p):
 
     if not isfile(args.WHEEL_FILE):
         p.error("cannot access %s. No such file" % args.WHEEL_FILE)
+
+    try:
+        check_abi3(args.WHEEL_FILE, False, True)
+    except ABI3ViolationException:
+        # TODO continue to also get manylinux symbol violations
+        return 1
 
     try:
         winfo = analyze_wheel_abi(args.WHEEL_FILE)
