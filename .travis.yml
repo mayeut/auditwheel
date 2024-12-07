@@ -1,7 +1,7 @@
 os: linux
 dist: focal
 language: python
-python: "3.11"
+python: "3.10"
 
 branches:
   except:
@@ -40,7 +40,7 @@ install:
   - pip install nox
 
 script:
-  - nox -s tests-3.11
+  - nox -s tests-3.10
 
 after_success:
   - if [ "$(uname -m)" != "aarch64" ]; then qemu-x86_64-static ${HOME}/codecov; fi
