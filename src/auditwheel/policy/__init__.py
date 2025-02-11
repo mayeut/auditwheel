@@ -12,9 +12,9 @@ from typing import Any
 from auditwheel.elfutils import filter_undefined_symbols, is_subdir
 
 from ..architecture import Architecture
+from ..error import InvalidLibc
 from ..lddtree import DynamicExecutable
-from ..libc import Libc, get_libc
-from ..musllinux import find_musl_libc, get_musl_version
+from ..libc import Libc, LibcVersion
 
 _HERE = Path(__file__).parent
 LIBPYTHON_RE = re.compile(r"^libpython\d+\.\d+m?.so(.\d)*$")
@@ -59,13 +59,13 @@ class WheelPolicies:
         arch: Architecture | None = None,
     ) -> None:
         if libc is None:
-            libc = get_libc() if musl_policy is None else Libc.MUSL
+            libc = Libc.detect() if musl_policy is None else Libc.MUSL
         if libc != Libc.MUSL and musl_policy is not None:
             msg = f"'musl_policy' shall be None for libc {libc.name}"
             raise ValueError(msg)
         if libc == Libc.MUSL:
             if musl_policy is None:
-                musl_version = get_musl_version(find_musl_libc())
+                musl_version = libc.get_current_version()
                 musl_policy = f"musllinux_{musl_version.major}_{musl_version.minor}"
             elif _MUSL_POLICY_RE.match(musl_policy) is None:
                 msg = f"Invalid 'musl_policy': '{musl_policy}'"
@@ -114,8 +114,42 @@ class WheelPolicies:
             assert len(self._policies) == 2, self._policies
 
     @property
+    def libc(self) -> Libc:
+        return self._libc_variant
+
+    @property
     def architecture(self) -> Architecture:
         return self._architecture
+
+    @property
+    def default(self) -> str:
+        """Returns the default policy for the running platform without the architecture suffix"""
+        if self._musl_policy is not None:
+            return self._musl_policy
+        assert self._libc_variant == Libc.GLIBC
+        regex = re.compile(r"manylinux_(?P<major>[0-9]+)_(?P<minor>[0-9]+)_")
+        known_versions = []
+        for p in self._policies:
+            m = regex.match(p.name)
+            if m:
+                known_versions.append(
+                    LibcVersion(int(m.group("major")), int(m.group("minor")))
+                )
+        assert len(known_versions) > 0
+        try:
+            glibc_version = self._libc_variant.get_current_version()
+            if glibc_version not in known_versions:
+                logger.warning("no policy for glibc %s", glibc_version)
+                candidates = [
+                    version for version in known_versions if version < glibc_version
+                ]
+                if candidates:
+                    known_versions = candidates
+        except InvalidLibc as err:
+            logger.warning("%s", str(err))
+
+        glibc_version = sorted(known_versions)[-1]
+        return f"manylinux_{glibc_version.major}_{glibc_version.minor}"
 
     @property
     def policies(self) -> list[Policy]:

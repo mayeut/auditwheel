@@ -4,8 +4,6 @@ import argparse
 import logging
 from pathlib import Path
 
-from auditwheel.policy import WheelPolicies
-
 logger = logging.getLogger(__name__)
 
 
@@ -32,22 +30,38 @@ def printp(text: str) -> None:
 
 def execute(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     from . import json
-    from .wheel_abi import NonPlatformWheel, analyze_wheel_abi
+    from .error import NonPlatformWheel, WheelToolsError
+    from .wheel_abi import analyze_wheel_abi
+    from .wheeltools import get_wheel_architecture, get_wheel_libc
 
-    wheel_policy = WheelPolicies()
     wheel_file: Path = args.WHEEL_FILE
     fn = wheel_file.name
 
     if not wheel_file.is_file():
         parser.error(f"cannot access {wheel_file}. No such file")
 
+    fn = wheel_file.name
+    try:
+        arch = get_wheel_architecture(fn)
+    except (WheelToolsError, NonPlatformWheel):
+        logger.warning("The architecture could not be deduced from the wheel filename")
+        arch = None
+
+    try:
+        libc = get_wheel_libc(fn)
+    except WheelToolsError:
+        logger.debug("The libc could not be deduced from the wheel filename")
+        libc = None
+
     try:
         winfo = analyze_wheel_abi(
-            wheel_policy, wheel_file, frozenset(), args.DISABLE_ISA_EXT_CHECK
+            libc, arch, wheel_file, frozenset(), args.DISABLE_ISA_EXT_CHECK
         )
     except NonPlatformWheel as e:
-        logger.info(e.message)
+        logger.info("%s", e.message)
         return 1
+
+    wheel_policy = winfo.wheel_policy
 
     libs_with_versions = [
         f"{k} with versions {v}" for k, v in winfo.versioned_symbols.items()

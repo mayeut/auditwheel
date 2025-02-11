@@ -19,8 +19,10 @@ from .elfutils import (
     elf_is_python_extension,
     elf_references_PyFPE_jbuf,
 )
+from .error import InvalidLibc, NonPlatformWheel
 from .genericpkgctx import InGenericPkgCtx
 from .lddtree import DynamicExecutable, ldd
+from .libc import Libc
 from .policy import ExternalReference, Policy, WheelPolicies
 
 log = logging.getLogger(__name__)
@@ -28,6 +30,8 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class WheelAbIInfo:
+    wheel_policy: WheelPolicies
+    full_external_refs: dict[Path, dict[str, ExternalReference]]
     overall_policy: Policy
     external_refs: dict[str, ExternalReference]
     ref_policy: Policy
@@ -41,6 +45,7 @@ class WheelAbIInfo:
 
 @dataclass(frozen=True)
 class WheelElfData:
+    wheel_policy: WheelPolicies
     full_elftree: dict[Path, DynamicExecutable]
     full_external_refs: dict[Path, dict[str, ExternalReference]]
     versioned_symbols: dict[str, set[str]]
@@ -48,46 +53,20 @@ class WheelElfData:
     uses_PyFPE_jbuf: bool
 
 
-class WheelAbiError(Exception):
-    """Root exception class"""
-
-
-class NonPlatformWheel(WheelAbiError):
-    """No ELF binaries in the wheel"""
-
-    def __init__(self, architecture: Architecture, libraries: list[str]) -> None:
-        if not libraries:
-            msg = (
-                "This does not look like a platform wheel, no ELF executable "
-                "or shared library file (including compiled Python C extension) "
-                "found in the wheel archive"
-            )
-        else:
-            libraries_str = "\n\t".join(libraries)
-            msg = (
-                "Invalid binary wheel: no ELF executable or shared library file "
-                "(including compiled Python C extension) with a "
-                f"{architecture.value!r} architecure found. The following "
-                f"ELF files were found:\n\t{libraries_str}\n"
-            )
-        super().__init__(msg)
-
-    @property
-    def message(self) -> str:
-        assert isinstance(self.args[0], str)
-        return self.args[0]
-
-
 @functools.lru_cache
 def get_wheel_elfdata(
-    wheel_policy: WheelPolicies, wheel_fn: Path, exclude: frozenset[str]
+    libc: Libc | None,
+    architecture: Architecture | None,
+    wheel_fn: Path,
+    exclude: frozenset[str],
 ) -> WheelElfData:
-    full_elftree = {}
-    nonpy_elftree = {}
-    full_external_refs = {}
+    full_elftree: dict[Path, DynamicExecutable] = {}
+    nonpy_elftree: dict[Path, DynamicExecutable] = {}
+    full_external_refs: dict[Path, dict[str, ExternalReference]] = {}
     versioned_symbols: dict[str, set[str]] = defaultdict(set)
     uses_ucs2_symbols = False
     uses_PyFPE_jbuf = False
+    wheel_policy: WheelPolicies | None = None
 
     with InGenericPkgCtx(wheel_fn) as ctx:
         shared_libraries_in_purelib = []
@@ -111,15 +90,33 @@ def get_wheel_elfdata(
                 elftree = ldd(fn, exclude=exclude)
 
                 try:
-                    arch = elftree.platform.baseline_architecture
-                    if arch != wheel_policy.architecture.baseline:
-                        shared_libraries_with_invalid_machine.append(so_name)
-                        log.warning("ignoring: %s with %s architecture", so_name, arch)
-                        continue
+                    elf_arch = elftree.platform.baseline_architecture
                 except ValueError:
                     shared_libraries_with_invalid_machine.append(so_name)
                     log.warning("ignoring: %s with unknown architecture", so_name)
                     continue
+                if architecture is None:
+                    log.info("setting architecture to %s", elf_arch.value)
+                    architecture = elf_arch
+                elif elf_arch != architecture.baseline:
+                    shared_libraries_with_invalid_machine.append(so_name)
+                    log.warning("ignoring: %s with %s architecture", so_name, elf_arch)
+                    continue
+
+                if elftree.libc is not None:
+                    if libc is None:
+                        log.info("setting libc to %s", elftree.libc)
+                        libc = elftree.libc
+                    elif libc != elftree.libc:
+                        log.warning("ignoring: %s with %s libc", so_name, elftree.libc)
+                        continue
+
+                if (
+                    wheel_policy is None
+                    and libc is not None
+                    and architecture is not None
+                ):
+                    wheel_policy = WheelPolicies(libc=libc, arch=architecture)
 
                 platform_wheel = True
 
@@ -132,6 +129,11 @@ def get_wheel_elfdata(
                 # If the ELF is a Python extention, we definitely need to
                 # include its external dependencies.
                 if is_py_ext:
+                    if wheel_policy is None:
+                        assert architecture is not None
+                        assert libc is None
+                        msg = f"couldn't detect libc for python extension {fn}"
+                        raise InvalidLibc(msg)
                     full_elftree[fn] = elftree
                     uses_PyFPE_jbuf |= elf_references_PyFPE_jbuf(elf)
                     if py_ver == 2:
@@ -160,9 +162,8 @@ def get_wheel_elfdata(
             raise RuntimeError(msg)
 
         if not platform_wheel:
-            raise NonPlatformWheel(
-                wheel_policy.architecture, shared_libraries_with_invalid_machine
-            )
+            arch = None if architecture is None else architecture.value
+            raise NonPlatformWheel(arch, shared_libraries_with_invalid_machine)
 
         # Get a list of all external libraries needed by ELFs in the wheel.
         needed_libs = {
@@ -170,6 +171,16 @@ def get_wheel_elfdata(
             for elf in itertools.chain(full_elftree.values(), nonpy_elftree.values())
             for lib in elf.needed
         }
+
+        if wheel_policy is None:
+            # we have no python extensions, either we have shared libraries with
+            # no dependencies on libc (unlikely) or a statically linked executable
+            # let's fallback to the host libc
+            assert architecture is not None
+            assert libc is None
+            libc = Libc.detect()
+            log.warning("couldn't detect wheel libc, defaulting to %s", str(libc))
+            wheel_policy = WheelPolicies(libc=libc, arch=architecture)
 
         for fn, elf_tree in nonpy_elftree.items():
             # If a non-pyextension ELF file is not needed by something else
@@ -191,6 +202,7 @@ def get_wheel_elfdata(
     )
 
     return WheelElfData(
+        wheel_policy,
         full_elftree,
         full_external_refs,
         versioned_symbols,
@@ -310,21 +322,21 @@ def _get_machine_policy(
 
 
 def analyze_wheel_abi(
-    wheel_policy: WheelPolicies,
+    libc: Libc | None,
+    architecture: Architecture | None,
     wheel_fn: Path,
     exclude: frozenset[str],
     disable_isa_ext_check: bool,
 ) -> WheelAbIInfo:
+    data = get_wheel_elfdata(libc, architecture, wheel_fn, exclude)
+    wheel_policy = data.wheel_policy
+    elftree_by_fn = data.full_elftree
+    external_refs_by_fn = data.full_external_refs
+    versioned_symbols = data.versioned_symbols
+
     external_refs: dict[str, ExternalReference] = {
         p.name: ExternalReference({}, {}, p) for p in wheel_policy.policies
     }
-
-    elf_data = get_wheel_elfdata(wheel_policy, wheel_fn, exclude)
-    elftree_by_fn = elf_data.full_elftree
-    external_refs_by_fn = elf_data.full_external_refs
-    versioned_symbols = elf_data.versioned_symbols
-    has_ucs2 = elf_data.uses_ucs2_symbols
-    uses_PyFPE_jbuf = elf_data.uses_PyFPE_jbuf
 
     for fn in elftree_by_fn:
         update(external_refs, external_refs_by_fn[fn])
@@ -362,8 +374,8 @@ def analyze_wheel_abi(
             wheel_policy, elftree_by_fn, frozenset(external_libs.values())
         )
 
-    ucs_policy = wheel_policy.lowest if has_ucs2 else wheel_policy.highest
-    pyfpe_policy = wheel_policy.lowest if uses_PyFPE_jbuf else wheel_policy.highest
+    ucs_policy = wheel_policy.lowest if data.uses_ucs2_symbols else wheel_policy.highest
+    pyfpe_policy = wheel_policy.lowest if data.uses_PyFPE_jbuf else wheel_policy.highest
 
     overall_policy = min(
         symbol_policy,
@@ -375,6 +387,8 @@ def analyze_wheel_abi(
     )
 
     return WheelAbIInfo(
+        wheel_policy,
+        external_refs_by_fn,
         overall_policy,
         external_refs,
         ref_policy,

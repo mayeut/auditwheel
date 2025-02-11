@@ -14,7 +14,6 @@ from auditwheel.policy import (
     Policy,
     WheelPolicies,
     _validate_pep600_compliance,
-    get_libc,
     get_replace_platforms,
 )
 
@@ -183,6 +182,7 @@ class TestLddTreeExternalReferences:
         libs = filtered_libs + unfiltered_libs
         lddtree = DynamicExecutable(
             interpreter=None,
+            libc=Libc.GLIBC,
             path="/path/to/lib",
             realpath=Path("/path/to/lib"),
             platform=Platform(
@@ -229,7 +229,7 @@ class TestLddTreeExternalReferences:
             Libc.MUSL,
             None,
             None,
-            does_not_raise() if get_libc() == Libc.MUSL else raises(InvalidLibc),
+            does_not_raise() if Libc.detect() == Libc.MUSL else raises(InvalidLibc),
         ),
     ],
     ids=ids,
