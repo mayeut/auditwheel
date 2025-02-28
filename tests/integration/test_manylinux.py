@@ -24,7 +24,14 @@ from auditwheel.policy import WheelPolicies
 logger = logging.getLogger(__name__)
 
 ENCODING = "utf-8"
-PLATFORM = Architecture.get_native_architecture().value
+NATIVE_PLATFORM = Architecture.get_native_architecture().value
+PLATFORM = os.environ.get("AUDITWHEEL_ARCH", NATIVE_PLATFORM)
+GOARCH = {
+    "x86_64": "amd64",
+    "i686": "386",
+    "aarch64": "arm64",
+    "armv7l": "arm/v7",
+}.get(PLATFORM, PLATFORM)
 MANYLINUX1_IMAGE_ID = f"quay.io/pypa/manylinux1_{PLATFORM}:latest"
 MANYLINUX2010_IMAGE_ID = f"quay.io/pypa/manylinux2010_{PLATFORM}:latest"
 MANYLINUX2014_IMAGE_ID = f"quay.io/pypa/manylinux2014_{PLATFORM}:latest"
@@ -273,6 +280,7 @@ def docker_start(
         detach=True,
         volumes=dvolumes,
         environment=env_variables,
+        platform=f"linux/{GOARCH}",
     )
     logger.info("Started container %s", con.id[:12])
     return con
