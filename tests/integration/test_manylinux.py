@@ -19,6 +19,7 @@ from docker.models.containers import Container
 from elftools.elf.elffile import ELFFile
 
 from auditwheel.architecture import Architecture
+from auditwheel.libc import Libc
 from auditwheel.policy import WheelPolicies
 
 logger = logging.getLogger(__name__)
@@ -837,7 +838,7 @@ class TestManylinux(Anylinux):
             test_path, env={"WITH_DEPENDENCY": with_dependency}
         )
 
-        wheel_policy = WheelPolicies()
+        wheel_policy = WheelPolicies(libc=Libc.GLIBC, arch=Architecture(PLATFORM))
         policy = wheel_policy.get_policy_by_name(policy_name)
         older_policies = [
             f"{p}_{PLATFORM}"
