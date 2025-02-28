@@ -65,8 +65,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/auditwheel_tests
-          key: python${{ matrix.python }}-${{ runner.arch }}-${{ hashFiles('**/test_manylinux.py') }}
-          restore-keys: python${{ matrix.python }}-${{ runner.arch }}-
+          key: python${{ matrix.python }}-${{ matrix.platform[1] }}-${{ hashFiles('**/test_manylinux.py') }}
+          restore-keys: python${{ matrix.python }}-${{ matrix.platform[1] }}-
       - name: Install CPython ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
@@ -78,7 +78,7 @@ jobs:
       - name: Run tests
         run: pipx run nox -s tests-${{ matrix.python }}
         env:
-          - AUDITWHEEL_ARCH: ${{ matrix.platform[1] }}
+          AUDITWHEEL_ARCH: ${{ matrix.platform[1] }}
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v5
         with:
