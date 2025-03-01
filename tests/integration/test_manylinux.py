@@ -27,12 +27,6 @@ logger = logging.getLogger(__name__)
 ENCODING = "utf-8"
 NATIVE_PLATFORM = Architecture.get_native_architecture().value
 PLATFORM = os.environ.get("AUDITWHEEL_ARCH", NATIVE_PLATFORM)
-GOARCH = {
-    "x86_64": "amd64",
-    "i686": "386",
-    "aarch64": "arm64",
-    "armv7l": "arm/v7",
-}.get(PLATFORM, PLATFORM)
 MANYLINUX1_IMAGE_ID = f"quay.io/pypa/manylinux1_{PLATFORM}:latest"
 MANYLINUX2010_IMAGE_ID = f"quay.io/pypa/manylinux2010_{PLATFORM}:latest"
 MANYLINUX2014_IMAGE_ID = f"quay.io/pypa/manylinux2014_{PLATFORM}:latest"
@@ -59,6 +53,7 @@ if PLATFORM in {"i686", "x86_64"}:
     }
 elif PLATFORM == "armv7l":
     MANYLINUX_IMAGES = {"manylinux_2_31": MANYLINUX_2_31_IMAGE_ID}
+    POLICY_ALIASES = {}
 else:
     MANYLINUX_IMAGES = {
         "manylinux_2_17": MANYLINUX2014_IMAGE_ID,
@@ -282,6 +277,12 @@ def docker_start(
     client = docker.from_env()
 
     dvolumes = {host: {"bind": ctr, "mode": "rw"} for (ctr, host) in volumes.items()}
+    goarch = {
+        "x86_64": "amd64",
+        "i686": "386",
+        "aarch64": "arm64",
+        "armv7l": "arm/v7",
+    }.get(PLATFORM, PLATFORM)
 
     logger.info("Starting container with image %r", image)
     con = client.containers.run(
@@ -290,7 +291,7 @@ def docker_start(
         detach=True,
         volumes=dvolumes,
         environment=env_variables,
-        platform=f"linux/{GOARCH}",
+        platform=f"linux/{goarch}",
     )
     logger.info("Started container %s", con.id[:12])
     return con
