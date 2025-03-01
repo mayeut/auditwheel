@@ -961,7 +961,13 @@ class TestManylinux(Anylinux):
         with tmp_docker_image(MANYLINUX_PYTHON_IMAGE_ID, commnds) as img_id:
             yield img_id
 
-    @pytest.fixture(scope="session", params=MANYLINUX_IMAGES.keys())
+    @pytest.fixture(
+        scope="session",
+        params=[
+            pytest.param(key, marks=pytest.mark.xdist_group(key))
+            for key in MANYLINUX_IMAGES
+        ],
+    )
     def any_manylinux_img(self, request):
         """Each manylinux image, with auditwheel installed.
 
@@ -1131,7 +1137,13 @@ class TestMusllinux(Anylinux):
         with tmp_docker_image(MUSLLINUX_PYTHON_IMAGE_ID, commands) as img_id:
             yield img_id
 
-    @pytest.fixture(scope="session", params=MUSLLINUX_IMAGES.keys())
+    @pytest.fixture(
+        scope="session",
+        params=[
+            pytest.param(key, marks=pytest.mark.xdist_group(key))
+            for key in MUSLLINUX_IMAGES
+        ],
+    )
     def any_manylinux_img(self, request):
         """Each musllinux image, with auditwheel installed.
 
