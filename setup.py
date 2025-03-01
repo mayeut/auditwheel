@@ -3,7 +3,14 @@ from __future__ import annotations
 from setuptools import setup
 
 extras = {
-    "test": ["pytest>=3.4", "jsonschema", "patchelf", "pretend", "docker"],
+    "test": [
+        "pytest>=3.4",
+        "pytest-xdist",
+        "jsonschema",
+        "patchelf",
+        "pretend",
+        "docker",
+    ],
     "coverage": ["pytest-cov"],
 }
 extras["coverage"] += extras["test"]

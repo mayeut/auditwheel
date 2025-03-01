@@ -65,6 +65,7 @@ def tests(session: nox.Session) -> None:
     session.install("-e", f".[{extras}]")
     if RUNNING_CI:
         posargs.extend(["--cov", "auditwheel", "--cov-branch"])
+        posargs.extend(["-n", "auto", "--dist=loadgroup"])
         # pull manylinux images that will be used.
         # this helps passing tests which would otherwise timeout.
         for image in _docker_images(session):
