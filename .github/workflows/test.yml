@@ -50,8 +50,8 @@ jobs:
         include:
           - platform: [ 'ubuntu-24.04', 'i686' ]
             python: '3.12'
-          # - platform: [ 'ubuntu-24.04-arm', 'armv7l' ]
-          #   python: '3.12'
+          - platform: [ 'ubuntu-24.04-arm', 'armv7l' ]
+            python: '3.12'
           - platform: [ 'ubuntu-24.04', 'ppc64le' ]
             python: '3.12'
             qemu: true
@@ -79,6 +79,7 @@ jobs:
         run: pipx run nox -s tests-${{ matrix.python }}
         env:
           AUDITWHEEL_ARCH: ${{ matrix.platform[1] }}
+          AUDITWHEEL_QEMU: ${{ matrix.qemu }}
       - name: Upload coverage to codecov
         uses: codecov/codecov-action@v5
         with:

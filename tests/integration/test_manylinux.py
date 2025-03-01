@@ -37,6 +37,7 @@ MANYLINUX1_IMAGE_ID = f"quay.io/pypa/manylinux1_{PLATFORM}:latest"
 MANYLINUX2010_IMAGE_ID = f"quay.io/pypa/manylinux2010_{PLATFORM}:latest"
 MANYLINUX2014_IMAGE_ID = f"quay.io/pypa/manylinux2014_{PLATFORM}:latest"
 MANYLINUX_2_28_IMAGE_ID = f"quay.io/pypa/manylinux_2_28_{PLATFORM}:latest"
+MANYLINUX_2_31_IMAGE_ID = f"quay.io/pypa/manylinux_2_31_{PLATFORM}:latest"
 MANYLINUX_2_34_IMAGE_ID = f"quay.io/pypa/manylinux_2_34_{PLATFORM}:latest"
 if PLATFORM in {"i686", "x86_64"}:
     MANYLINUX_IMAGES = {
@@ -56,12 +57,15 @@ if PLATFORM in {"i686", "x86_64"}:
         "manylinux_2_12": ["manylinux2010"],
         "manylinux_2_17": ["manylinux2014"],
     }
+elif PLATFORM == "armv7l":
+    MANYLINUX_IMAGES = {"manylinux_2_31": MANYLINUX_2_31_IMAGE_ID}
 else:
     MANYLINUX_IMAGES = {
         "manylinux_2_17": MANYLINUX2014_IMAGE_ID,
         "manylinux_2_28": MANYLINUX_2_28_IMAGE_ID,
-        "manylinux_2_34": MANYLINUX_2_34_IMAGE_ID,
     }
+    if os.environ.get("AUDITWHEEL_QEMU", "") != "true":
+        MANYLINUX_IMAGES.update({"manylinux_2_34": MANYLINUX_2_34_IMAGE_ID})
     POLICY_ALIASES = {
         "manylinux_2_17": ["manylinux2014"],
     }
