@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <pthread.h>
+#include <time.h>
 #if defined(__GLIBC_PREREQ)
 #if __GLIBC_PREREQ(2, 28)
 #include <threads.h>
@@ -35,6 +36,8 @@ run(PyObject *self, PyObject *args)
     if (res == 0) {
         pthread_mutexattr_destroy(&attr);
     }
+#elif defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 31)
+    return pthread_clockjoin_np(pthread_self(), NULL, CLOCK_MONOTONIC, NULL) == EDEADLK ? 0 : 1;
 #elif __GLIBC_PREREQ(2, 28)
     res = thrd_equal(thrd_current(), thrd_current()) ? 0 : 1;
 #elif __GLIBC_PREREQ(2, 24)

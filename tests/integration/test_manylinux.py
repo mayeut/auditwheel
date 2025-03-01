@@ -24,7 +24,6 @@ from auditwheel.policy import WheelPolicies
 
 logger = logging.getLogger(__name__)
 
-ENCODING = "utf-8"
 NATIVE_PLATFORM = Architecture.get_native_architecture().value
 PLATFORM = os.environ.get("AUDITWHEEL_ARCH", NATIVE_PLATFORM)
 MANYLINUX1_IMAGE_ID = f"quay.io/pypa/manylinux1_{PLATFORM}:latest"
@@ -336,7 +335,7 @@ def docker_exec(
 ) -> str:
     logger.info("docker exec %s: %r", container.id[:12], cmd)
     ec, output = container.exec_run(cmd, workdir=cwd, environment=env)
-    output = output.decode(ENCODING)
+    output = output.decode("utf-8")
     if ec != expected_retcode:
         print(output)
         raise CalledProcessError(ec, cmd, output=output)
@@ -406,6 +405,8 @@ def build_numpy(container: AnyLinuxContainer, output_dir: Path) -> str:
             # https://github.com/numpy/numpy/issues/27932
             fix_hwcap = "echo '#define HWCAP_S390_VX 2048' >> /usr/include/bits/hwcap.h"
             container.exec(f'sh -c "{fix_hwcap}"')
+    elif container.policy.startswith(("manylinux_2_31_",)):
+        container.exec("apt-get update && apt-get install -y libopenblas-dev")
     elif container.policy.startswith(("manylinux_2_28_", "manylinux_2_34_")):
         container.exec("dnf install -y openblas-devel")
     else:
@@ -518,6 +519,8 @@ class Anylinux:
         policy = anylinux.policy
         if policy.startswith("musllinux_"):
             anylinux.exec("apk add gsl-dev")
+        elif policy.startswith("manylinux_2_28_"):
+            anylinux.exec("apt-get update && apt-get install -y libgsl-dev")
         else:
             anylinux.exec("yum install -y gsl-devel")
 
