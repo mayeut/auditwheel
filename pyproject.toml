@@ -41,7 +41,7 @@ auditwheel = "auditwheel.main:main"
 Homepage = "https://github.com/pypa/auditwheel"
 
 [dependency-groups]
-test = ["pytest>=3.4", "jsonschema", "patchelf", "pretend", "docker"]
+test = ["pytest>=3.4", "pytest-xdist", "jsonschema", "patchelf", "pretend", "docker"]
 coverage = ["pytest-cov", {include-group = "test"}]
 dev = [{include-group = "test"}, {include-group = "coverage"}]
 
