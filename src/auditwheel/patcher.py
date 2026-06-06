@@ -91,11 +91,14 @@ class ElfPatcher:
         raise NotImplementedError
 
 
-def _verify_patchelf() -> Path:
+def _verify_patchelf(*, allow_lief: bool) -> Path:
     """This function looks for the ``patchelf`` external binary in the PATH,
     checks for the required version, and throws an exception if a proper
     version can't be found. Otherwise, silence is golden
     """
+    patchelf_path = which("lief-patchelf") if allow_lief else None
+    if patchelf_path is not None:
+        return Path(patchelf_path)
     patchelf_path = which("patchelf")
     if not patchelf_path:
         msg = "Cannot find required utility `patchelf` in PATH"
@@ -114,9 +117,9 @@ def _verify_patchelf() -> Path:
 
 
 class Patchelf(ElfPatcher):
-    def __init__(self, platform: str = "") -> None:
+    def __init__(self, platform: str = "", *, allow_lief: bool = True) -> None:
         super().__init__(platform)
-        self._patchelf_path = str(_verify_patchelf())
+        self._patchelf_path = str(_verify_patchelf(allow_lief=allow_lief))
 
     def get_rpath_direct(self, file_name: Path) -> str:
         args = ("--print-rpath", file_name)

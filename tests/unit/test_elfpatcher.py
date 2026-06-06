@@ -32,7 +32,7 @@ def test_elfpatcher_remove_needed_overlap(tmp_path):
 
 @patch("auditwheel.patcher.which")
 def test_patchelf_unavailable(which):
-    which.return_value = False
+    which.return_value = None
     with pytest.raises(ValueError, match="Cannot find required utility"):
         Patchelf()
 
@@ -40,10 +40,10 @@ def test_patchelf_unavailable(which):
 @patch("auditwheel.patcher.which")
 @patch("auditwheel.patcher.check_output")
 def test_patchelf_check_output_fail(check_output, which):
-    which.return_value = True
+    which.return_value = "patchelf"
     check_output.side_effect = CalledProcessError(1, "patchelf --version")
     with pytest.raises(ValueError, match="Could not call"):
-        Patchelf()
+        Patchelf(allow_lief=False)
 
 
 @patch("auditwheel.patcher.which")
@@ -59,10 +59,10 @@ def test_patchelf_version_check(check_output, which, version):
 @patch("auditwheel.patcher.check_output")
 @pytest.mark.parametrize("version", ["0.13.99", "0.13", "0.9", "0.1"])
 def test_patchelf_version_check_fail(check_output, which, version):
-    which.return_value = True
+    which.return_value = "patchelf"
     check_output.return_value.decode.return_value = f"patchelf {version}"
     with pytest.raises(ValueError, match=f"patchelf {version} found"):
-        Patchelf()
+        Patchelf(allow_lief=False)
 
 
 @patch("auditwheel.patcher._verify_patchelf")
