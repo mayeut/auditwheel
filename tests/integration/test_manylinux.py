@@ -1055,11 +1055,12 @@ class TestManylinux(Anylinux):
             'git config --global --add safe.directory "/auditwheel_src"',
             "pip install -U pip setuptools 'coverage[toml]>=7.13'",
             "pip install -U -e /auditwheel_src",
+            "pipx install -f patchelf==0.19.0.0rc1",
         ]
         lief_patchelf_file = {
-            "aarch64": "lief-tools-aarch64-unknown-linux-musl.zip",
-            "i686": "lief-tools-i686-unknown-linux-musl.zip",
-            "x86_64": "lief-tools-x86_64-unknown-linux-musl.zip",
+            "aarch64_disabled": "lief-tools-aarch64-unknown-linux-musl.zip",
+            "i686_disabled": "lief-tools-i686-unknown-linux-musl.zip",
+            "x86_64_disabled": "lief-tools-x86_64-unknown-linux-musl.zip",
         }.get(PLATFORM)
         if lief_patchelf_file:
             lief_patchelf_url = "https://github.com/lief-project/LIEF/releases/download"
